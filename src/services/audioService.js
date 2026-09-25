@@ -1,4 +1,16 @@
-import { Howl, Howler } from 'howler';
+import { Howl } from 'howler';
+
+const STORED = {
+  music: { volume: 'mgs-volume-music', muted: 'mgs-muted-music' },
+  sound: { volume: 'mgs-volume-sfx', muted: 'mgs-muted-sfx' }
+};
+
+const MASTER_KEY = 'mgs-master-level';
+
+const readVolume = (key, fallback) => {
+  const stored = parseFloat(localStorage.getItem(key));
+  return Number.isFinite(stored) ? stored : fallback;
+};
 
 class AudioService {
   constructor() {
@@ -7,20 +19,30 @@ class AudioService {
     this.timeouts = [];
     this.intervals = [];
     this.activeOverride = null;
+    this.loadRetries = {};
     
-    // Volume control properties
-    this.masterVolume = localStorage.getItem('mgs-master-volume') || 1.0;
-    this.isMuted = localStorage.getItem('mgs-muted') === 'true' || false;
-    this.previousVolume = this.masterVolume; // Store volume for unmute
+    // Music and effects carry their own level, on top of each sound's base volume
+    const legacyVolume = readVolume('mgs-master-volume', 1.0);
+
+    // One dial over the mix: it scales both channels and leaves their balance alone
+    this.master = readVolume(MASTER_KEY, 1.0);
+
+    this.channels = {
+      music: {
+        volume: readVolume(STORED.music.volume, legacyVolume),
+        muted: localStorage.getItem(STORED.music.muted) === 'true'
+      },
+      sound: {
+        volume: readVolume(STORED.sound.volume, legacyVolume),
+        muted: localStorage.getItem(STORED.sound.muted) === 'true'
+      }
+    };
     
     // For error handling
     this.errorListeners = [];
     
     // For playing override listeners
     this.overrideUpdateListeners = [];
-    
-    // Initialize Howler master volume
-    this.applyMasterVolume();
   }
 
   // Error event subscription
@@ -40,56 +62,128 @@ class AudioService {
 
   // Notify all listeners about an error
   emitError(error) {
-    console.error(`Failed to load audio source '${error.id}'`, error);
+    console.error(`Failed to load audio source '${error.id}' (error code ${error.code})`, error);
     this.errorListeners.forEach(listener => listener(error));
+  }
+
+  // MediaError codes: 1 aborted, 2 network, 3 decode, 4 source not supported
+  handleLoadError(item, type, code) {
+    // We abort downloads ourselves whenever the stage changes mid-load; that is
+    // not a failure the player needs to hear about
+    if (code === 1) {
+      console.debug(`Load of '${item.id}' aborted`);
+      return;
+    }
+
+    const isCurrentStage = type === 'music' && this.currentStage && this.currentStage.music === item.id;
+    const retries = this.loadRetries[item.id] || 0;
+
+    // Remote archives drop connections; one silent retry covers most of it
+    if (isCurrentStage && retries < 1 && code === 2) {
+      this.loadRetries[item.id] = retries + 1;
+
+      setTimeout(() => {
+        const sound = this.sounds[item.id];
+
+        if (sound && this.currentStage && this.currentStage.music === item.id) {
+          sound.play();
+        }
+      }, 1000);
+
+      return;
+    }
+
+    this.emitError({ type, code, ...item });
   }
 
   emitOverrideUpdate(override) {
     this.overrideUpdateListeners.forEach(listener => listener(override));
   }
 
-  // Apply the current volume setting to Howler global volume
-  applyMasterVolume() {
-    Howler.volume(this.isMuted ? 0 : this.masterVolume);
-  }
-  
-  // Set a new volume level (0 to 1)
-  setVolume(volume) {
-    this.masterVolume = volume;
-    this.previousVolume = volume;
-    localStorage.setItem('mgs-master-volume', volume);
-    this.applyMasterVolume();
+  // Effective level for a channel, applied on top of each sound's own volume
+  channelLevel(type) {
+    const channel = this.channels[type];
+    return channel.muted ? 0 : channel.volume * this.master;
   }
 
-  setMute(isMuted) {
-    this.isMuted = isMuted;
-    localStorage.setItem('mgs-muted', isMuted);
-    this.applyMasterVolume();
+  setMasterVolume(volume) {
+    this.master = volume;
+    localStorage.setItem(MASTER_KEY, volume);
+    this.applyChannelVolume('music');
+    this.applyChannelVolume('sound');
   }
-  
-  // Get current volume state
-  getVolumeState() {
+
+  getMasterVolume() {
+    return this.master;
+  }
+
+  applyChannelVolume(type) {
+    const level = this.channelLevel(type);
+
+    Object.values(this.sounds).forEach(sound => {
+      if (sound.meta.type !== type) return;
+      sound.volume(sound.meta.baseVolume * level);
+    });
+  }
+
+  setChannelVolume(type, volume) {
+    this.channels[type].volume = volume;
+    localStorage.setItem(STORED[type].volume, volume);
+    this.applyChannelVolume(type);
+  }
+
+  setChannelMute(type, muted) {
+    this.channels[type].muted = muted;
+    localStorage.setItem(STORED[type].muted, muted);
+    this.applyChannelVolume(type);
+  }
+
+  getChannelState(type) {
+    return { ...this.channels[type] };
+  }
+
+  // Read-only snapshot of the stage currently loaded, for the now playing bar
+  getPlaybackState() {
+    if (!this.currentStage) return null;
+
+    const music = this.sounds[this.currentStage.music];
+    if (!music) return null;
+
+    const seek = music.seek();
+
     return {
-      volume: this.masterVolume,
-      isMuted: this.isMuted
+      stage: this.currentStage,
+      playing: music.playing(),
+      duration: music.duration() || 0,
+      seek: typeof seek === 'number' ? seek : 0
     };
   }
 
   loadSounds(soundData) {
+    // Reloading data replaces every Howl; without unloading first, whatever is
+    // playing keeps playing from an instance nothing references any more
+    this.stop();
+    Object.values(this.sounds).forEach(sound => sound.unload());
+    this.sounds = {};
+    this.loadRetries = {};
+
     // Load music tracks (with loop enabled)
     soundData.sources.music.forEach(item => {
       const customLoop = !!(item.loop_start != null || item.loop_end != null);
+      const baseVolume = item.volume != null ? item.volume : 1.0;
 
       this.sounds[item.id] = new Howl({
         src: [item.src],
         loop: !customLoop,
         preload: item.preload || false,
         html5: true,
-        volume: item.volume != null ? item.volume : 1.0,
-        onloaderror: () => {
-          this.emitError({ type: 'music', ...item });
+        volume: baseVolume * this.channelLevel('music'),
+        onloaderror: (soundId, code) => {
+          this.handleLoadError(item, 'music', code);
         },
         onplay: () => {
+          delete this.loadRetries[item.id];
+
           if (!customLoop) {
             return;
           }
@@ -107,23 +201,25 @@ class AudioService {
         }
       });
 
-      this.sounds[item.id].meta = { type: 'music' };
+      this.sounds[item.id].meta = { type: 'music', baseVolume };
     });
     
     // Load sound effects (no loop)
     soundData.sources.sounds.forEach(item => {
+      const baseVolume = item.volume != null ? item.volume : 1.0;
+
       this.sounds[item.id] = new Howl({
         src: [item.src],
         loop: false,
         preload: item.preload || false,
         html5: true,
-        volume: item.volume != null ? item.volume : 1.0,
-        onloaderror: () => {
-          this.emitError({ type: 'sound', ...item });
+        volume: baseVolume * this.channelLevel('sound'),
+        onloaderror: (soundId, code) => {
+          this.handleLoadError(item, 'sound', code);
         }
       });
 
-      this.sounds[item.id].meta = { type: 'sound' };
+      this.sounds[item.id].meta = { type: 'sound', baseVolume };
     });
   }
 
@@ -133,6 +229,9 @@ class AudioService {
     if (!stage || !stage.music) return;
 
     this.stopAllMusic();
+
+    // A new attempt at this stage deserves a fresh retry
+    delete this.loadRetries[stage.music];
 
     // Save previous and current stage
     this.currentStage = stage;
@@ -159,7 +258,10 @@ class AudioService {
     // Keep track of pause timestamp
     if (this.currentStage) {
       const music = this.sounds[this.currentStage.music];
-      music.meta.paused_at = music.seek();
+
+      if (music) {
+        music.meta.paused_at = music.seek();
+      }
     }
 
     // Stop current music and clear any pending sounds
@@ -189,14 +291,69 @@ class AudioService {
     // For now we'll assume the override stays active until manually cleared
   }
 
+  // Returns the ids actually played, so the button can track its own progress
   playSfx(sfx) {
+    const played = [];
+
     // Play each sound without stopping music
     sfx.play.forEach(sound => {
       if (this.sounds[sound.id]) {
         // Create a new instance to allow overlapping sounds
         this.sounds[sound.id].play();
+        played.push(sound.id);
       }
     });
+
+    return played;
+  }
+
+  getSfxProgress(ids) {
+    let playing = false;
+    let seek = 0;
+    let duration = 0;
+
+    ids.forEach(id => {
+      const sound = this.sounds[id];
+      if (!sound || !sound.playing()) return;
+
+      const position = sound.seek();
+
+      playing = true;
+      seek = Math.max(seek, typeof position === 'number' ? position : 0);
+      duration = Math.max(duration, sound.duration() || 0);
+    });
+
+    return { playing, seek, duration };
+  }
+
+  stopAllSounds() {
+    Object.values(this.sounds).forEach(sound => {
+      if (sound.meta.type === 'sound') {
+        sound.stop();
+      }
+    });
+  }
+
+  // Full stop: music, effects already sounding, and pending ones
+  stop() {
+    this.stopAllMusic();
+    this.stopAllSounds();
+    this.clearTimeouts();
+    this.loadRetries = {};
+    this.currentStage = null;
+    this.activeOverride = null;
+    this.emitOverrideUpdate(null);
+  }
+
+  // Toggling the active override off: back to the stage, or silence if there is none
+  clearOverride(stages) {
+    if (this.currentStage) {
+      this.stopAllSounds();
+      this.resumeStage(stages);
+      return;
+    }
+
+    this.stop();
   }
 
   resumeStage(stages) {
