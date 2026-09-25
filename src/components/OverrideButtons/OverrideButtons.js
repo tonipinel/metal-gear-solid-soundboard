@@ -1,49 +1,50 @@
 import React, { useEffect, useState } from 'react';
 import audioService from '../../services/audioService';
+import { cleanLabel } from '../../utils/label';
+import { getOverrideIcon } from '../../utils/icons';
 import './OverrideButtons.css';
 
-function OverrideButtons({ overrides }) {
+function OverrideButtons({ overrides, stages }) {
   const [visibleButtons, setVisibleButtons] = useState([]);
+  const [activeOverride, setActiveOverride] = useState(null);
 
-  // Update visible buttons whenever the override state changes
   useEffect(() => {
     const updateVisibleButtons = () => {
-      const filtered = overrides.filter(override => {
-        // If no show_if condition, always show
-        if (!override.show_if) return true;
-        
-        // Otherwise use our filtering service
-        return audioService.isAudioAvaible(override.show_if);
-      });
-
-      setVisibleButtons(filtered);
+      setVisibleButtons(
+        overrides.filter((override) => !override.show_if || audioService.isAudioAvaible(override.show_if))
+      );
+      setActiveOverride(audioService.activeOverride);
     };
-    
-    // Initial filter
-    updateVisibleButtons();
-    
-    // Set up an interval to periodically update the visible buttons
-    // This will catch any changes to the active override
-    const intervalId = setInterval(updateVisibleButtons, 500);
-    
-    return () => clearInterval(intervalId);
-  }, [overrides]);
 
-  const handleOverrideClick = (override) => {
-    audioService.playOverride(override);
-  };
+    updateVisibleButtons();
+
+    return audioService.onOverrideUpdate(updateVisibleButtons);
+  }, [overrides]);
 
   return (
     <div className="override-buttons">
-      {visibleButtons.map((override) => (
-        <button
-          key={override.id}
-          className="override-button"
-          onClick={() => handleOverrideClick(override)}
-        >
-          {override.label}
-        </button>
-      ))}
+      {visibleButtons.map((override, index) => {
+        const Icon = getOverrideIcon(override.id);
+        const isActive = override.id === activeOverride;
+
+        return (
+          <button
+            key={override.id || `override-${index}`}
+            type="button"
+            className={
+              'override-button' +
+              (override.id === 'override-alert' ? ' override-button--alert' : '') +
+              (isActive ? ' override-button--active' : '')
+            }
+            onClick={() => (isActive ? audioService.clearOverride(stages) : audioService.playOverride(override))}
+            aria-pressed={isActive}
+          >
+            <Icon className="override-button__icon" aria-hidden="true" />
+            <span>{cleanLabel(override.label)}</span>
+            {isActive && <span className="override-button__state">Playing</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }

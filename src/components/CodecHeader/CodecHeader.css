@@ -1,0 +1,90 @@
+.codec-header {
+  flex: none;
+  padding: calc(env(safe-area-inset-top) + 8px) var(--pad) 10px;
+  background: var(--codec-bg);
+  border-bottom: 1px solid var(--codec-line);
+}
+
+.codec-header__bar {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.codec-header__freq {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--codec-dim);
+}
+
+.codec-header__title {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.codec-header__screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.portrait {
+  position: relative;
+  flex: none;
+  width: clamp(68px, 22vw, 96px);
+  aspect-ratio: 108 / 177;
+  margin: 0;
+  overflow: hidden;
+  background: var(--codec-panel);
+  border: 1px solid var(--codec-fg);
+  box-shadow: var(--codec-glow);
+}
+
+.portrait__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--codec-fg);
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(123, 224, 60, 0.07) 0px,
+      rgba(123, 224, 60, 0.07) 2px,
+      transparent 2px,
+      transparent 4px
+    );
+}
+
+/* On a wide screen the codec is a fixed-size instrument, centred, not a
+   banner that stretches with the window */
+@media (min-width: 900px) {
+  .codec-header__bar {
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  .codec-header__screen {
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .portrait {
+    width: 80px;
+  }
+
+  .codec-header__screen {
+    gap: 12px;
+  }
+}

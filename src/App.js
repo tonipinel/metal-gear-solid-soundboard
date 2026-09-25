@@ -2,11 +2,27 @@ import React, { useState, useEffect } from 'react';
 import StageSelector from './components/StageSelector/StageSelector';
 import OverrideButtons from './components/OverrideButtons/OverrideButtons';
 import SfxButtons from './components/SfxButtons/SfxButtons';
-import SettingsButton from './components/SettingsButton/SettingsButton';
-import VolumeControl from './components/VolumeControl/VolumeControl';
+import SettingsPanel from './components/SettingsPanel/SettingsPanel';
+import CodecHeader from './components/CodecHeader/CodecHeader';
+import TabBar from './components/TabBar/TabBar';
+import NowPlayingBar from './components/NowPlayingBar/NowPlayingBar';
+import CrtOverlay from './components/CrtOverlay/CrtOverlay';
 import ErrorToast from './components/ErrorToast/ErrorToast';
 import audioService from './services/audioService';
+import useMediaQuery from './hooks/useMediaQuery';
 import './App.css';
+
+const TABS = [
+  { id: 'stage', label: 'Stage' },
+  { id: 'events', label: 'Events' },
+  { id: 'sfx', label: 'Sfx' },
+];
+
+const EYEBROWS = {
+  stage: 'Mission select',
+  events: 'Stage overrides',
+  sfx: 'Sound effects',
+};
 
 function App() {
   const [soundboardData, setSoundboardData] = useState(null);
@@ -15,16 +31,19 @@ function App() {
   const [selectedStage, setSelectedStage] = useState('');
   const [soundErrors, setSoundErrors] = useState([]);
   const [isOverrideActive, setIsOverrideActive] = useState(false);
+  const [activeTab, setActiveTab] = useState('stage');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [crtEnabled, setCrtEnabled] = useState(localStorage.getItem('mgs-crt') !== 'off');
+  const isDesktop = useMediaQuery('(min-width: 900px)');
 
   useEffect(() => {
-    // Register error listener
     const unsubscribe = audioService.onError(error => {
       setSoundErrors(prev => [...prev, { ...error, errorId: Date.now() }]);
     });
 
     // Try to load from localStorage first
     const savedData = localStorage.getItem('mgs-soundboard-data');
-    
+
     if (savedData) {
       try {
         const parsedData = JSON.parse(savedData);
@@ -39,17 +58,27 @@ function App() {
       loadDefaultData();
     }
 
-    // Cleanup error listener on unmount
     return unsubscribe;
   }, []);
 
   useEffect(() => {
     const unsubscribe = audioService.onOverrideUpdate(override => {
       setIsOverrideActive(override !== null);
+
+      if (override && override.id === 'override-alert') {
+        document.documentElement.dataset.state = 'alert';
+      } else {
+        delete document.documentElement.dataset.state;
+      }
     });
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.crt = crtEnabled ? 'on' : 'off';
+    localStorage.setItem('mgs-crt', crtEnabled ? 'on' : 'off');
+  }, [crtEnabled]);
 
   const loadDefaultData = () => {
     import('./data/metal-gear-solid-soundboard.json')
@@ -66,85 +95,90 @@ function App() {
   };
 
   const handleUpdateData = (newData) => {
-    // Update state with new data
     setSoundboardData(newData);
-    
-    // Save to localStorage
     localStorage.setItem('mgs-soundboard-data', JSON.stringify(newData));
-    
-    // Reload audio service with new data
+
+    // loadSounds stops everything, so nothing is selected any more
     audioService.loadSounds(newData);
+    setSelectedStage('');
+  };
+
+  const handleStop = () => {
+    audioService.stop();
+    setSelectedStage('');
   };
 
   const handleDismissError = (errorId) => {
     setSoundErrors(prev => prev.filter(err => err.errorId !== errorId));
   };
 
-  if (loading) return <div className="loading">Loading soundboard...</div>;
-  if (error) return <div className="error">{error}</div>;
+  if (loading) return <p className="app__status">Establishing codec link…</p>;
+  if (error) return <p className="app__status app__status--error">{error}</p>;
   if (!soundboardData) return null;
 
   return (
-    <div className="soundboard-container">
-      <div className="header-container">
-        <h1>Metal Gear Solid Soundboard</h1>
-        <VolumeControl />
-      </div>
-      
-      <div className="stage-section">
-        <h2>Stage</h2>
-        <StageSelector stages={soundboardData.stages} selectedStage={selectedStage} setSelectedStage={setSelectedStage} />
-        <button 
-          className="restart-button"
-          onClick={() => audioService.playStage(selectedStage, soundboardData.stages)}
-        >
-          Restart
-        </button>
-        {isOverrideActive && (
-          <button
-            className="resume-button"
-            onClick={() => audioService.resumeStage(soundboardData.stages)}
-          >
-            Resume
-          </button>
-        )}
-      </div>
-      
-      <div className="override-section">
-        <h2>Events</h2>
-        <OverrideButtons overrides={soundboardData['stage-overrides']} />
-      </div>
-      
-      <div className="sfx-section">
-        <h2>Sound Effects</h2>
-        <SfxButtons sfxList={soundboardData.sfx} />
-      </div>
+    <div className={`app${isDesktop ? ' app--desktop' : ''}`}>
+      <CodecHeader onOpenSettings={() => setSettingsOpen(true)} />
 
-      <div className="settings-wrapper">
-        <SettingsButton
-          soundboardData={soundboardData}
-          onUpdateData={handleUpdateData}
-        />
-      </div>
+      {isDesktop ? (
+        <main className="app__main app__main--columns">
+          <section className="app__column">
+            <p className="app__eyebrow u-eyebrow">{EYEBROWS.stage}</p>
+            <StageSelector
+              stages={soundboardData.stages}
+              selectedStage={selectedStage}
+              setSelectedStage={setSelectedStage}
+            />
+          </section>
 
-      <div className="disclaimer warning">
-        <p>
-          <strong>Disclaimer:</strong> This soundboard does not store or host any audio files on this server. 
-          All sounds are streamed directly from external sources (archives, etc). 
-          This app is designed for personal use during tabletop gaming sessions and 
-          operates as a reference tool only. All Metal Gear Solid audio content, 
-          characters, and related media are property of Konami. 
-          This is an unofficial fan project not affiliated with or endorsed by Konami.
-        </p>
-      </div>
+          <section className="app__column">
+            <p className="app__eyebrow u-eyebrow">{EYEBROWS.events}</p>
+            <OverrideButtons overrides={soundboardData['stage-overrides']} stages={soundboardData.stages} />
+          </section>
 
-      <div className="disclaimer">
-        <p>
-          This web app was developed by <a target="_blank" href="https://github.com/wikiti" rel="noreferrer">Daniel @wikiti</a>, with the help of <a target="_blank" href="https://boardgamegeek.com/user/Zypzu" rel="noreferrer">Eric @Zypzu</a> and other BGG community members.
-        </p>
-      </div>
+          <section className="app__column">
+            <p className="app__eyebrow u-eyebrow">{EYEBROWS.sfx}</p>
+            <SfxButtons sfxList={soundboardData.sfx} />
+          </section>
+        </main>
+      ) : (
+        <main className="app__main" key={activeTab}>
+          <p className="app__eyebrow u-eyebrow">{EYEBROWS[activeTab]}</p>
+
+          {activeTab === 'stage' && (
+            <StageSelector
+              stages={soundboardData.stages}
+              selectedStage={selectedStage}
+              setSelectedStage={setSelectedStage}
+            />
+          )}
+
+          {activeTab === 'events' && <OverrideButtons overrides={soundboardData['stage-overrides']} stages={soundboardData.stages} />}
+
+          {activeTab === 'sfx' && <SfxButtons sfxList={soundboardData.sfx} />}
+        </main>
+      )}
+
+      <NowPlayingBar
+        stages={soundboardData.stages}
+        isOverrideActive={isOverrideActive}
+        onStop={handleStop}
+      />
+
+      {!isDesktop && <TabBar tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />}
+
+      <SettingsPanel
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        soundboardData={soundboardData}
+        onUpdateData={handleUpdateData}
+        crtEnabled={crtEnabled}
+        onToggleCrt={() => setCrtEnabled(prev => !prev)}
+      />
 
       <ErrorToast errors={soundErrors} onDismiss={handleDismissError} />
+
+      <CrtOverlay />
     </div>
   );
 }

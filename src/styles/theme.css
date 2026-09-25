@@ -1,0 +1,48 @@
+:root {
+  --codec-bg: #050d05;
+  --codec-panel: #0a180a;
+  --codec-panel-hi: #0f2a0f;
+  --codec-fg: #7be03c;
+  --codec-dim: #62b84a;
+  --codec-line: #2a6b2a;
+  --codec-alert: #e24b4a;
+  --codec-glow: 0 0 6px rgba(123, 224, 60, 0.35);
+
+  --font-display: 'Share Tech Mono', ui-monospace, monospace;
+  --font-body: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --tap-min: 44px;
+  --bar-h: 56px;
+  --gap: 10px;
+  --pad: 12px;
+}
+
+:root[data-state='alert'] {
+  --codec-fg: var(--codec-alert);
+  --codec-dim: #a35a59;
+  --codec-line: #4d1f1f;
+  --codec-panel: #180a0a;
+  --codec-panel-hi: #2a0f0f;
+  --codec-glow: 0 0 8px rgba(226, 75, 74, 0.45);
+}
+
+:root[data-crt='off'] {
+  --codec-glow: none;
+}
+
+.u-glow {
+  text-shadow: var(--codec-glow);
+}
+
+.u-eyebrow {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  color: var(--codec-dim);
+  text-transform: uppercase;
+}
+
+.u-panel {
+  background: var(--codec-panel);
+  border: 1px solid var(--codec-line);
+}
