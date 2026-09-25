@@ -1,16 +1,16 @@
 {
   "files": {
-    "main.css": "/metal-gear-solid-soundboard/static/css/main.098f1633.css",
-    "main.js": "/metal-gear-solid-soundboard/static/js/main.6a2eedd1.js",
+    "main.css": "/metal-gear-solid-soundboard/static/css/main.f413fe85.css",
+    "main.js": "/metal-gear-solid-soundboard/static/js/main.ba88c908.js",
     "static/js/101.bf3ab20b.chunk.js": "/metal-gear-solid-soundboard/static/js/101.bf3ab20b.chunk.js",
     "static/js/453.f721032f.chunk.js": "/metal-gear-solid-soundboard/static/js/453.f721032f.chunk.js",
     "index.html": "/metal-gear-solid-soundboard/index.html",
-    "main.098f1633.css.map": "/metal-gear-solid-soundboard/static/css/main.098f1633.css.map",
-    "main.6a2eedd1.js.map": "/metal-gear-solid-soundboard/static/js/main.6a2eedd1.js.map",
+    "main.f413fe85.css.map": "/metal-gear-solid-soundboard/static/css/main.f413fe85.css.map",
+    "main.ba88c908.js.map": "/metal-gear-solid-soundboard/static/js/main.ba88c908.js.map",
     "453.f721032f.chunk.js.map": "/metal-gear-solid-soundboard/static/js/453.f721032f.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.098f1633.css",
-    "static/js/main.6a2eedd1.js"
+    "static/css/main.f413fe85.css",
+    "static/js/main.ba88c908.js"
   ]
 }
