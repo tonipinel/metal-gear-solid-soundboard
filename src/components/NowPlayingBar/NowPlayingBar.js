@@ -42,12 +42,21 @@ function NowPlayingBar({ stages, isOverrideActive, onStop }) {
   if (playing) status = 'Transmitting';
   else if (isOverrideActive) status = 'Standby';
 
+  const isBuffering = status === 'Buffering';
+
   return (
-    <div className="now-playing">
-      <div className="now-playing__line" style={{ width: `${progress}%` }} />
+    <div className={`now-playing${isBuffering ? ' now-playing--buffering' : ''}`}>
+      {isBuffering ? (
+        <div className="now-playing__sweep" aria-hidden="true" />
+      ) : (
+        <div className="now-playing__line" style={{ width: `${progress}%` }} />
+      )}
 
       <div className="now-playing__info">
-        <span className="u-eyebrow">{status}</span>
+        <span className="u-eyebrow now-playing__status">
+          {status}
+          {isBuffering && <span className="now-playing__dots" aria-hidden="true" />}
+        </span>
         <span className="now-playing__stage u-glow">{cleanLabel(stage.label)}</span>
       </div>
 
