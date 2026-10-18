@@ -225,6 +225,39 @@ instance nothing references, out of reach of stop(), until the page is
 reloaded. `App` clears the selected stage at the same time, so the list does not
 keep marking a stage that is no longer playing.
 
+## iOS playback
+
+iOS needs three separate accommodations, each found the hard way:
+
+1. **Volume is ignored on `<audio>` elements.** Apple's own docs: the level is
+   under the user's physical control, setting `volume` does nothing and reading
+   it returns 1. With HTML5 playback every track therefore plays at full level,
+   and the music — authored at 0.25 so it sits under the voices — buries
+   everything. Apple touch devices are switched to Web Audio, where the volume
+   is a gain node. Detection is by capability plus platform: recent WebKit
+   accepts the assignment and reports it back while still ignoring it, so the
+   probe alone is not enough. `localStorage.mgs-force-engine` forces either
+   engine, which is how the Web Audio path gets tested on a desktop.
+
+2. **Audio output only opens after a real sound plays inside a real tap.** A
+   silent buffer does not count, and neither does an audible synthesised one:
+   only a sound played through Howler worked. A track that finishes
+   downloading after the tap is no longer considered user-initiated, so the
+   first stage of a session played into the void while `playing()` happily
+   reported true and the signal meter showed output. The intro screen turns
+   that into a feature: START CODEC plays the codec effect, which opens the
+   channel for the rest of the session. The effect is kept loaded for it.
+
+3. **Decoding before the context is awake fails.** The one track with
+   `preload: true` was the only one that broke, with "Decoding audio data
+   failed", because it decoded at startup. Declared preloads are queued and
+   run once the channel is open.
+
+Settings shows a diagnostics block — engine, context state, track state,
+levels, a signal meter tapped off Howler's master gain, and the last error —
+because none of the above is visible from the outside, and on a phone there is
+no console to check.
+
 ## Load errors
 
 `onloaderror` now keeps the browser's MediaError code instead of discarding it,

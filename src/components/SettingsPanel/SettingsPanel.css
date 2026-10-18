@@ -138,3 +138,26 @@
   background: var(--codec-panel);
   border: 1px solid var(--codec-line);
 }
+
+.settings__diagnostics {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--codec-panel);
+  border: 1px solid var(--codec-line);
+  font-size: 11px;
+}
+
+.settings__diagnostics dt {
+  color: var(--codec-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.settings__diagnostics dd {
+  margin: 0;
+  color: var(--codec-fg);
+  word-break: break-word;
+}

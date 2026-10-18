@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import audioService from '../../services/audioService';
 import VolumeControl from '../VolumeControl/VolumeControl';
 import './SettingsPanel.css';
 
@@ -7,6 +8,7 @@ function SettingsPanel({ isOpen, onClose, soundboardData, onUpdateData, crtEnabl
   const [isModified, setIsModified] = useState(false);
   const [validationError, setValidationError] = useState(null);
   const panelRef = useRef(null);
+  const [diagnostics, setDiagnostics] = useState(() => audioService.getDiagnostics());
   const onCloseRef = useRef(onClose);
 
   onCloseRef.current = onClose;
@@ -20,6 +22,10 @@ function SettingsPanel({ isOpen, onClose, soundboardData, onUpdateData, crtEnabl
 
   useEffect(() => {
     if (!isOpen) return undefined;
+
+    const read = () => setDiagnostics(audioService.getDiagnostics());
+    read();
+    const diagnosticsTimer = setInterval(read, 1000);
 
     const panel = panelRef.current;
     const previouslyFocused = document.activeElement;
@@ -52,6 +58,7 @@ function SettingsPanel({ isOpen, onClose, soundboardData, onUpdateData, crtEnabl
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      clearInterval(diagnosticsTimer);
       document.removeEventListener('keydown', handleKeyDown);
       if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
     };
@@ -139,6 +146,23 @@ function SettingsPanel({ isOpen, onClose, soundboardData, onUpdateData, crtEnabl
               Reset to default
             </button>
           </div>
+        </div>
+
+        <div className="settings__section">
+          <span className="u-eyebrow">Playback</span>
+          <p className="settings__hint">
+            {audioService.usesHtml5
+              ? 'Tracks stream as they download.'
+              : 'This device ignores volume on audio elements, so tracks are decoded up front to keep the mix under control.'}
+          </p>
+          <dl className="settings__diagnostics">
+            {Object.entries(diagnostics).map(([key, value]) => (
+              <React.Fragment key={key}>
+                <dt>{key}</dt>
+                <dd>{value}</dd>
+              </React.Fragment>
+            ))}
+          </dl>
         </div>
 
         <div className="settings__section">
