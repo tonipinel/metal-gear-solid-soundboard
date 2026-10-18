@@ -7,6 +7,7 @@ import CodecHeader from './components/CodecHeader/CodecHeader';
 import TabBar from './components/TabBar/TabBar';
 import NowPlayingBar from './components/NowPlayingBar/NowPlayingBar';
 import CrtOverlay from './components/CrtOverlay/CrtOverlay';
+import CodecIntro from './components/CodecIntro/CodecIntro';
 import ErrorToast from './components/ErrorToast/ErrorToast';
 import audioService from './services/audioService';
 import useMediaQuery from './hooks/useMediaQuery';
@@ -33,6 +34,8 @@ function App() {
   const [isOverrideActive, setIsOverrideActive] = useState(false);
   const [activeTab, setActiveTab] = useState('stage');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [openerReady, setOpenerReady] = useState(false);
   const [crtEnabled, setCrtEnabled] = useState(localStorage.getItem('mgs-crt') !== 'off');
   const isDesktop = useMediaQuery('(min-width: 900px)');
 
@@ -76,6 +79,17 @@ function App() {
   }, []);
 
   useEffect(() => {
+    audioService.listenForGestures();
+  }, []);
+
+  useEffect(() => {
+    if (started) return undefined;
+
+    const poll = setInterval(() => setOpenerReady(audioService.isOpenerReady()), 400);
+    return () => clearInterval(poll);
+  }, [started]);
+
+  useEffect(() => {
     document.documentElement.dataset.crt = crtEnabled ? 'on' : 'off';
     localStorage.setItem('mgs-crt', crtEnabled ? 'on' : 'off');
   }, [crtEnabled]);
@@ -101,6 +115,11 @@ function App() {
     // loadSounds stops everything, so nothing is selected any more
     audioService.loadSounds(newData);
     setSelectedStage('');
+  };
+
+  const handleStart = () => {
+    audioService.startSession();
+    setStarted(true);
   };
 
   const handleStop = () => {
@@ -175,6 +194,8 @@ function App() {
         crtEnabled={crtEnabled}
         onToggleCrt={() => setCrtEnabled(prev => !prev)}
       />
+
+      {!started && <CodecIntro onStart={handleStart} ready={openerReady} />}
 
       <ErrorToast errors={soundErrors} onDismiss={handleDismissError} />
 
